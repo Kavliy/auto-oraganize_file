@@ -1,16 +1,16 @@
+### 这是一个自动整理文件的程序,能够按照时间/文件类型/模式匹配整理文件,正在实现按照自定义分类以及AI介入帮助分类
 ## This program automatically organizes files by date, file type, or pattern matching. Features under development include custom categorization and AI-assisted classification
-## 这是一个自动整理文件的程序,能够按照时间/文件类型/模式匹配整理文件,正在实现按照自定义分类以及AI介入帮助分类
-
 
 # filesort
 
 A command-line tool that automatically sorts files into subdirectories by various classification strategies.
+一个可以通过多种分类策略自动将文件排序到子目录中的命令行工具。
 
-## Environment
+## Environment 环境
 
 - **Python** 3.6+ (standard library only, no third-party dependencies)
 
-## Installation
+## Installation 安装
 
 Clone the repository and make the script executable:
 
@@ -22,14 +22,14 @@ chmod +x filesort
 
 Optionally, add the script to your `PATH` or create a symlink for global access.
 
-## Usage
+## Usage 用法
 
 ```
 filesort <target_dir> [OPTIONS]
 filesort <target_dir> --undo
 ```
 
-### Options
+### Options 选择
 
 | Option | Description |
 |--------|-------------|
@@ -42,7 +42,7 @@ filesort <target_dir> --undo
 
 By default, the tool shows a preview and asks for confirmation (`y/N`) before making any changes.
 
-## Examples
+## Examples 举例
 
 ### Group by file extension (default)
 
