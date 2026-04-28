@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+"""filesort — automatically sort files into subdirectories by various strategies.
+
+Usage:
+    filesort <target_dir> [OPTIONS]
+    filesort <target_dir> --undo
+"""
+
+import argparse
+import sys
+
+from organizer.core import organize
+from organizer.undo import undo_last
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(
+        prog="filesort",
+        description="Sort files into subdirectories by classification strategy.",
+        epilog="Preview is shown by default; confirm with 'y' or use --execute to skip.",
+    )
+    parser.add_argument(
+        "target",
+        help="Target directory containing files to organize.",
+    )
+
+    strategy_group = parser.add_mutually_exclusive_group()
+    strategy_group.add_argument(
+        "-d", "--by-date",
+        nargs="?", const="%Y-%m", metavar="FORMAT",
+        help="Group by modification date (default format: %%Y-%%m).",
+    )
+    strategy_group.add_argument(
+        "-t", "--by-type",
+        action="store_true",
+        help="Group by file extension.",
+    )
+    strategy_group.add_argument(
+        "-p", "--by-pattern",
+        metavar="PATTERN",
+        help="Group by regex pattern; capture group 1 becomes the category name.",
+    )
+    strategy_group.add_argument(
+        "-r", "--rules",
+        metavar="RULES_FILE",
+        help="Group using a custom rules file (planned, not yet implemented).",
+    )
+
+    parser.add_argument(
+        "-e", "--execute",
+        action="store_true",
+        help="Execute directly without preview/confirmation.",
+    )
+    parser.add_argument(
+        "-u", "--undo",
+        action="store_true",
+        help="Rollback the last organization operation.",
+    )
+    return parser
+
+
+def main():
+    parser = build_parser()
+    args = parser.parse_args()
+
+    # --undo mode: rollback and exit
+    if args.undo:
+        undo_last(args.target)
+        return
+
+    # Determine strategy
+    by_type = getattr(args, "by_type", False)
+    by_pattern = getattr(args, "by_pattern", None)
+    by_rules = getattr(args, "rules", None)
+    by_date = getattr(args, "by_date", None)
+
+    if by_type:
+        strategy_name = "by_type"
+        strategy_args = {}
+    elif by_pattern:
+        strategy_name = "by_pattern"
+        strategy_args = {"pattern": by_pattern}
+    elif by_rules:
+        strategy_name = "by_rules"
+        strategy_args = {"rules_file": by_rules}
+    elif by_date is not None:
+        strategy_name = "by_date"
+        strategy_args = {"fmt": by_date}
+    else:
+        # Default: group by type
+        strategy_name = "by_type"
+        strategy_args = {}
+
+    organize(
+        target_dir=args.target,
+        strategy_name=strategy_name,
+        strategy_args=strategy_args,
+        execute=args.execute,
+    )
+
+
+if __name__ == "__main__":
+    main()
