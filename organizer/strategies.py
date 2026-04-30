@@ -3,6 +3,10 @@ import re
 from datetime import datetime
 
 
+class StrategyError(ValueError):
+    """Raised when a strategy receives invalid user input."""
+
+
 def by_date(files, fmt="%Y-%m"):
     """Group files by modification date using the given strftime format."""
     groups = {}
@@ -26,7 +30,10 @@ def by_type(files):
 def by_pattern(files, pattern):
     """Group files by a regex pattern. Capture group 1 determines the category.
     Unmatched files go to 'uncategorized'."""
-    regex = re.compile(pattern)
+    try:
+        regex = re.compile(pattern)
+    except re.error as e:
+        raise StrategyError(f"Invalid regex pattern for --by-pattern: {e}") from e
     groups = {}
     for filepath in files:
         filename = os.path.basename(filepath)

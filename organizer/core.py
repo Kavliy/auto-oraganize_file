@@ -2,7 +2,13 @@ import os
 import shutil
 import sys
 
-from organizer.strategies import by_date, by_type, by_pattern, by_rules
+from organizer.strategies import (
+    StrategyError,
+    by_date,
+    by_type,
+    by_pattern,
+    by_rules,
+)
 from organizer.undo import save_operation
 
 
@@ -124,7 +130,11 @@ def organize(target_dir, strategy_name, strategy_args, execute=False):
         "by_rules": by_rules,
     }
     strategy_fn = strategies[strategy_name]
-    raw_groups = strategy_fn(files, **strategy_args)
+    try:
+        raw_groups = strategy_fn(files, **strategy_args)
+    except StrategyError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(2)
 
     groups = {}
     for raw_category, file_list in raw_groups.items():

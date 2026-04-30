@@ -1,7 +1,9 @@
+import io
 import os
 import shutil
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from datetime import datetime
 
 from organizer.core import _normalize_category_name, organize
@@ -44,6 +46,17 @@ class OrganizeTests(unittest.TestCase):
         self.assertTrue(os.path.exists(self._path("2026_04", "report.txt")))
         self.assertFalse(os.path.exists(self._path("2026", "04", "report.txt")))
         self.assertFalse(os.path.isdir(self._path("2026")))
+
+    def test_by_pattern_reports_invalid_regex_cleanly(self):
+        self._write_file("report.txt", "hello")
+        stderr = io.StringIO()
+
+        with redirect_stderr(stderr):
+            with self.assertRaises(SystemExit) as exc:
+                organize(self._tmpdir, "by_pattern", {"pattern": "("}, execute=True)
+
+        self.assertEqual(exc.exception.code, 2)
+        self.assertIn("Invalid regex pattern for --by-pattern", stderr.getvalue())
 
 
 if __name__ == "__main__":
