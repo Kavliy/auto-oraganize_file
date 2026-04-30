@@ -10,6 +10,7 @@ import argparse
 import sys
 
 from organizer.core import organize
+from organizer.presets import PresetError, load_preset, save_preset
 from organizer.undo import undo_last
 
 
@@ -41,15 +42,20 @@ def build_parser():
         help="Group by regex pattern; capture group 1 becomes the category name after sanitization.",
     )
     strategy_group.add_argument(
-        "-r", "--rules",
-        metavar="RULES_FILE",
-        help="Group using a custom rules file (planned, not yet implemented).",
+        "--preset",
+        metavar="NAME",
+        help="Load a saved preset for the selected directory.",
     )
 
     parser.add_argument(
         "-e", "--execute",
         action="store_true",
         help="Execute directly without preview/confirmation.",
+    )
+    parser.add_argument(
+        "--save-preset",
+        metavar="NAME",
+        help="Save the current strategy as a reusable preset.",
     )
     parser.add_argument(
         "-u", "--undo",
@@ -63,6 +69,12 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
 
+    if args.undo and (args.preset or args.save_preset):
+        parser.error("--undo cannot be combined with preset options.")
+
+    if args.preset and args.save_preset:
+        parser.error("--preset cannot be combined with --save-preset.")
+
     # --undo mode: rollback and exit
     if args.undo:
         undo_last(args.target)
@@ -71,18 +83,21 @@ def main():
     # Determine strategy
     by_type = getattr(args, "by_type", False)
     by_pattern = getattr(args, "by_pattern", None)
-    by_rules = getattr(args, "rules", None)
     by_date = getattr(args, "by_date", None)
+    preset_name = getattr(args, "preset", None)
 
-    if by_type:
+    if preset_name:
+        try:
+            strategy_name, strategy_args = load_preset(preset_name)
+        except PresetError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(2)
+    elif by_type:
         strategy_name = "by_type"
         strategy_args = {}
     elif by_pattern:
         strategy_name = "by_pattern"
         strategy_args = {"pattern": by_pattern}
-    elif by_rules:
-        strategy_name = "by_rules"
-        strategy_args = {"rules_file": by_rules}
     elif by_date is not None:
         strategy_name = "by_date"
         strategy_args = {"fmt": by_date}
@@ -90,6 +105,16 @@ def main():
         # Default: group by type
         strategy_name = "by_type"
         strategy_args = {}
+
+    if args.save_preset:
+        try:
+            path, existed = save_preset(args.save_preset, strategy_name, strategy_args)
+        except PresetError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(2)
+
+        action = "Updated" if existed else "Saved"
+        print(f"{action} preset '{args.save_preset}' in '{path}'.")
 
     organize(
         target_dir=args.target,

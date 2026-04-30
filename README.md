@@ -1,5 +1,5 @@
-### 这是一个自动整理文件的程序,能够按照时间/文件类型/模式匹配整理文件,正在实现按照自定义分类以及AI介入帮助分类
-## This program automatically organizes files by date, file type, or pattern matching. Features under development include custom categorization and AI-assisted classification
+### 这是一个自动整理文件的程序,能够按照时间/文件类型/模式匹配整理文件,并支持保存常用整理预设
+## This program automatically organizes files by date, file type, or pattern matching, and supports saving reusable presets
 
 # filesort
 
@@ -36,11 +36,12 @@ filesort <target_dir> --undo
 | `-d, --by-date [FORMAT]` | Group files by modification date. Default format: `%Y-%m`. Category names are sanitized to stay single-level. |
 | `-t, --by-type` | Group files by extension (default strategy). |
 | `-p, --by-pattern PATTERN` | Group files by regex pattern — capture group 1 becomes the category name after sanitization. |
-| `-r, --rules RULES_FILE` | Group using a custom rules file (not yet implemented). |
+| `--preset NAME` | Load a saved preset for the selected directory. |
+| `--save-preset NAME` | Save the current strategy as a reusable preset. |
 | `-e, --execute` | Execute directly without preview or confirmation. |
 | `-u, --undo` | Rollback the last organization operation. |
 
-By default, the tool shows a preview and asks for confirmation (`y/N`) before making any changes. Only files directly inside the selected directory are processed; subdirectories are not scanned recursively.
+By default, the tool shows a preview and asks for confirmation (`y/N`) before making any changes. Only files directly inside the selected directory are processed; subdirectories are not scanned recursively. Presets save the strategy and its parameters, not the target directory path.
 
 ## Examples 举例
 
@@ -152,6 +153,19 @@ Unmatched files go to an `uncategorized` directory. Invalid path characters such
 ```bash
 $ filesort ~/Downloads --by-type --execute
 Done: 12 file(s) organized into 4 categories.
+```
+
+### Save and reuse a preset
+
+```bash
+$ filesort ~/reports --by-pattern 'QData一体机(.+?)\d{4}年.*' --save-preset qdata-db
+Saved preset 'qdata-db' in '/home/user/.config/filesort/presets.json'.
+```
+
+Later, apply the same strategy to any selected directory:
+
+```bash
+$ filesort ~/reports --preset qdata-db
 ```
 
 ### Undo the last operation
