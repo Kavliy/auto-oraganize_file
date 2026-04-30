@@ -1,208 +1,191 @@
-### 这是一个自动整理文件的程序,能够按照时间/文件类型/模式匹配整理文件,并支持保存常用整理预设与扩展名分组
-## This program automatically organizes files by date, file type, or pattern matching, and supports reusable presets plus saved extension groups
-
 # filesort
 
-A command-line tool that automatically sorts top-level files in a selected directory into subdirectories by various classification strategies.
-一个可以通过多种分类策略自动将所选目录中的顶层文件排序到子目录中的命令行工具。
+中文说明 | [English](README_EN.md)
 
-## Environment 环境
+`filesort` 是一个轻量的命令行文件整理工具，用来把所选目录中的顶层文件自动归类到子目录中。
 
-- **Python** 3.6+ (standard library only, no third-party dependencies)
+当前支持：
 
-## Installation 安装
+- 按修改时间整理
+- 按文件扩展名整理
+- 按正则模式整理
+- 保存常用整理预设
+- 保存全局扩展名分组
+- 撤销上一次整理
 
-Clone the repository and make the script executable:
+## 功能边界
+
+- 只处理你指定目录下的顶层文件
+- 不递归扫描子目录
+- 分类目录名会自动净化，避免生成非法路径或多层目录
+
+## 环境要求
+
+- Python 3.6+
+- 仅使用标准库，无第三方依赖
+
+## 安装
 
 ```bash
-git clone https://github.com/Kavliy/auto-oraganize_file
-cd qreport_script
+git clone https://github.com/Kavliy/auto-oraganize_file.git
+cd auto-oraganize_file
 chmod +x filesort
 ```
 
-Optionally, add the script to your `PATH` or create a symlink for global access.
+你也可以把 `filesort` 放到 `PATH` 中，方便全局调用。
 
-## Usage 用法
+## 基本用法
 
-```
+```bash
 filesort <target_dir> [OPTIONS]
 filesort <target_dir> --undo
 ```
 
-### Options 选择
+默认会先显示预览，并要求确认；加上 `--execute` 可以直接执行。
 
-| Option | Description |
-|--------|-------------|
-| `-d, --by-date [FORMAT]` | Group files by modification date. Default format: `%Y-%m`. Category names are sanitized to stay single-level. |
-| `-t, --by-type` | Group files by extension (default strategy), applying saved type groups by default. |
-| `-p, --by-pattern PATTERN` | Group files by regex pattern — capture group 1 becomes the category name after sanitization. |
-| `--preset NAME` | Load a saved preset for the selected directory. |
-| `--save-preset NAME` | Save the current strategy as a reusable preset. |
-| `--set-type-group NAME=ext1,ext2` | Save a default extension group for `--by-type`, such as `images=jpg,jpeg,png`. |
-| `--remove-type-group NAME` | Remove one saved type group. |
-| `--list-type-groups` | List saved type groups. |
-| `--no-type-groups` | Ignore saved global type groups for this run. |
-| `-e, --execute` | Execute directly without preview or confirmation. |
-| `-u, --undo` | Rollback the last organization operation. |
+## 命令选项
 
-By default, the tool shows a preview and asks for confirmation (`y/N`) before making any changes. Only files directly inside the selected directory are processed; subdirectories are not scanned recursively. Presets save the strategy and its parameters, not the target directory path. Saved type groups act as the default behavior for `--by-type`.
+| 选项 | 说明 |
+| --- | --- |
+| `-t`, `--by-type` | 按扩展名整理，默认会应用已保存的扩展名分组 |
+| `-d`, `--by-date [FORMAT]` | 按修改时间整理，默认格式为 `%Y-%m` |
+| `-p`, `--by-pattern PATTERN` | 按正则分组，捕获组 1 作为分类名 |
+| `--preset NAME` | 使用已保存的整理预设 |
+| `--save-preset NAME` | 将当前整理策略保存为预设 |
+| `--set-type-group NAME=ext1,ext2` | 保存全局扩展名分组 |
+| `--remove-type-group NAME` | 删除一个扩展名分组 |
+| `--list-type-groups` | 查看当前扩展名分组 |
+| `--no-type-groups` | 本次按扩展名整理时忽略全局扩展名分组 |
+| `-e`, `--execute` | 跳过确认，直接执行 |
+| `-u`, `--undo` | 撤销最近一次整理 |
 
-## Examples 举例
+## 示例
 
-### Group by file extension (default)
-
-Sort files into subdirectories based on their extension:
+### 1. 按扩展名整理
 
 ```bash
-$ ls ~/Downloads
-report.pdf  notes.txt  photo.jpg  archive.zip  script.py
-
-$ filesort ~/Downloads
-
-Target: /home/user/Downloads
-Files to organize: 5
-Categories to create: 5
-
-  [jpg] (1 file(s))
-    photo.jpg -> jpg/
-  [pdf] (1 file(s))
-    report.pdf -> pdf/
-  [py] (1 file(s))
-    script.py -> py/
-  [txt] (1 file(s))
-    notes.txt -> txt/
-  [zip] (1 file(s))
-    archive.zip -> zip/
-
-Proceed? (y/N): y
-Done: 5 file(s) organized into 5 categories.
-
-$ ls ~/Downloads
-jpg/  pdf/  py/  txt/  zip/  .organize_log.json
+filesort ~/Downloads --by-type
 ```
 
-### Group by modification date
+### 2. 按时间整理
 
 ```bash
-$ filesort ~/Documents --by-date
-
-Target: /home/user/Documents
-Files to organize: 8
-Categories to create: 3
-
-  [2026-01] (3 file(s))
-    meeting_notes.txt -> 2026-01/
-    budget.xlsx -> 2026-01/
-  [2026-03] (2 file(s))
-    slides.pptx -> 2026-03/
-  [2026-04] (3 file(s))
-    draft.md -> 2026-04/
-    photo.png -> 2026-04/
-    export.csv -> 2026-04/
-
-Proceed? (y/N): y
+filesort ~/Documents --by-date
+filesort ~/Photos --by-date %Y/%m
 ```
 
-Custom date format:
+说明：
+
+- `%Y/%m` 这类格式会被自动净化成单层目录名，例如 `2026_04`
+
+### 3. 按正则模式整理
 
 ```bash
-$ filesort ~/photos --by-date %Y/%m   # sanitized into a single directory name like 2026_04
+filesort ~/exports --by-pattern '^([^_]+).*'
 ```
 
-### Group by regex pattern
+例如文件名：
+
+```text
+QData一体机交易历史备库2026年Q2季度4月第三次巡检报告
+QData一体机业务整合备库2026年Q2季度4月第三次巡检报告
+QData一体机余额宝备库2026年Q2季度4月第三次巡检报告
+```
+
+可以这样分类：
 
 ```bash
-# Group files by their prefix (e.g., "project_report_2026.pdf" -> "project")
-$ filesort ~/exports --by-pattern '^([^_]+).*'
-
-# Group by date pattern in filename
-$ filesort ~/logs --by-pattern '(\d{4}-\d{2}-\d{2})'
+filesort ~/reports --by-pattern 'QData一体机(.+?)\d{4}年.*'
 ```
 
-Unmatched files go to an `uncategorized` directory. Invalid path characters such as `/` and `\` are sanitized so every category stays within a single directory level.
-❯ 假如有这样一个文件夹,里面存在文件:
-  QData一体机交易历史备库2026年Q2季度4月第三次巡检报告,QData一体机业务整合备库2026年Q2季度4月第三次巡检
-  报告,QData一体机余额宝备库2026年Q2季度4月第三次巡检报告,满足:按照库名自动分类
+### 4. 保存常用预设
 
-● 使用 --by-pattern 正则分组策略。
-
-  文件名的结构是一致的：
-
-  QData一体机  +  [库名]  +  2026年Q2季度4月第三次巡检报告
-
-  只需用一个正则捕获中间的库名部分：
-
-  $ filesort /path/to/dir --by-pattern 'QData一体机(.+?)\d{4}年.*'
-
-  效果预览：
-
-  Target: /path/to/dir
-  Files to organize: 3
-  Categories to create: 3
-
-    [交易历史备库] (1 file(s))
-      QData一体机交易历史备库2026年Q2季度4月第三次巡检报告 -> 交易历史备库/
-    [业务整合备库] (1 file(s))
-      QData一体机业务整合备库2026年Q2季度4月第三次巡检报告 -> 业务整合备库/
-    [余额宝备库] (1 file(s))
-      QData一体机余额宝备库2026年Q2季度4月第三次巡检报告 -> 余额宝备库/
-
-  正则 QData一体机(.+?)\d{4}年.* 的含义：
-  - QData一体机 — 匹配固定前缀
-  - (.+?) — 捕获组1，非贪婪匹配库名
-  - \d{4}年.* — 匹配年份及后续部分（确保不同季度/月份的巡检报告都能匹配）
-
-### Execute without confirmation
+保存一个常用正则策略：
 
 ```bash
-$ filesort ~/Downloads --by-type --execute
-Done: 12 file(s) organized into 4 categories.
+filesort ~/reports --by-pattern 'QData一体机(.+?)\d{4}年.*' --save-preset qdata-db
 ```
 
-### Save and reuse a preset
+之后在任意目标目录复用：
 
 ```bash
-$ filesort ~/reports --by-pattern 'QData一体机(.+?)\d{4}年.*' --save-preset qdata-db
-Saved preset 'qdata-db' in '/home/user/.config/filesort/presets.json'.
+filesort ~/reports --preset qdata-db
 ```
 
-Later, apply the same strategy to any selected directory:
+说明：
+
+- 预设只保存整理策略和参数
+- 不保存目标目录路径
+
+### 5. 设置全局扩展名分组
+
+设置后，平时执行 `-t` 时会自动生效。
 
 ```bash
-$ filesort ~/reports --preset qdata-db
+filesort --set-type-group images=jpg,jpeg,png,gif
+filesort --set-type-group docs=pdf,doc,docx
 ```
 
-### Save default extension groups for `--by-type`
+之后直接：
 
 ```bash
-$ filesort --set-type-group images=jpg,jpeg,png,gif
-$ filesort --set-type-group docs=pdf,doc,docx
+filesort ~/Downloads -t
 ```
 
-After that, a normal by-type run automatically uses those groups:
+比如：
+
+- `jpg`, `jpeg`, `png`, `gif` 会进入 `images/`
+- `pdf`, `doc`, `docx` 会进入 `docs/`
+- 其他未映射扩展名仍按原扩展名分类，如 `mp4 -> mp4/`
+
+查看和删除：
 
 ```bash
-$ filesort ~/Downloads --by-type
+filesort --list-type-groups
+filesort --remove-type-group images
 ```
 
-You can inspect or remove them later:
+本次临时忽略全局分组：
 
 ```bash
-$ filesort --list-type-groups
-$ filesort --remove-type-group images
+filesort ~/Downloads -t --no-type-groups
 ```
 
-To temporarily ignore the saved groups:
+## 撤销整理
 
 ```bash
-$ filesort ~/Downloads --by-type --no-type-groups
+filesort ~/Downloads --undo
 ```
 
-### Undo the last operation
+当前撤销机制支持：
+
+- 恢复上一次整理移动的文件
+- 自动清理空分类目录
+- 如果部分文件回滚失败，会保留剩余记录，修复后可再次执行 `--undo`
+
+## 配置文件位置
+
+程序会把预设和扩展名分组保存在同一个配置文件中。
+
+- Windows: `%APPDATA%\filesort\presets.json`
+- Linux: `$XDG_CONFIG_HOME/filesort/presets.json`
+- 如果未设置 `XDG_CONFIG_HOME`，则使用 `~/.config/filesort/presets.json`
+
+也可以通过环境变量覆盖：
 
 ```bash
-$ filesort ~/Downloads --undo
-Undone: 5 file(s) moved back, strategy='by_type'.
+FILESORT_PRESETS_FILE=/path/to/presets.json
 ```
 
-Each undo restores files to their original locations and removes empty category directories. If a file cannot be restored because the original path is occupied or the organized copy is missing, the remaining undo entries stay in the log so you can fix the issue and run `--undo` again. Subsequent `--undo` calls roll back earlier operations one at a time.
+## 错误处理
+
+- 无效正则不会抛出 Python traceback，而是返回清晰的错误提示
+- 非法分类目录名会被自动净化
+- 扩展名分组冲突会直接报错，避免不确定行为
+
+## 适合的场景
+
+- 下载目录初步整理
+- 报告、截图、导出文件按规则归档
+- 使用固定命名格式的批量文件整理
+- 想要“配置一次，之后直接运行”的个人工作流
