@@ -1,5 +1,5 @@
-### 这是一个自动整理文件的程序,能够按照时间/文件类型/模式匹配整理文件,并支持保存常用整理预设
-## This program automatically organizes files by date, file type, or pattern matching, and supports saving reusable presets
+### 这是一个自动整理文件的程序,能够按照时间/文件类型/模式匹配整理文件,并支持保存常用整理预设与扩展名分组
+## This program automatically organizes files by date, file type, or pattern matching, and supports reusable presets plus saved extension groups
 
 # filesort
 
@@ -34,14 +34,18 @@ filesort <target_dir> --undo
 | Option | Description |
 |--------|-------------|
 | `-d, --by-date [FORMAT]` | Group files by modification date. Default format: `%Y-%m`. Category names are sanitized to stay single-level. |
-| `-t, --by-type` | Group files by extension (default strategy). |
+| `-t, --by-type` | Group files by extension (default strategy), applying saved type groups by default. |
 | `-p, --by-pattern PATTERN` | Group files by regex pattern — capture group 1 becomes the category name after sanitization. |
 | `--preset NAME` | Load a saved preset for the selected directory. |
 | `--save-preset NAME` | Save the current strategy as a reusable preset. |
+| `--set-type-group NAME=ext1,ext2` | Save a default extension group for `--by-type`, such as `images=jpg,jpeg,png`. |
+| `--remove-type-group NAME` | Remove one saved type group. |
+| `--list-type-groups` | List saved type groups. |
+| `--no-type-groups` | Ignore saved global type groups for this run. |
 | `-e, --execute` | Execute directly without preview or confirmation. |
 | `-u, --undo` | Rollback the last organization operation. |
 
-By default, the tool shows a preview and asks for confirmation (`y/N`) before making any changes. Only files directly inside the selected directory are processed; subdirectories are not scanned recursively. Presets save the strategy and its parameters, not the target directory path.
+By default, the tool shows a preview and asks for confirmation (`y/N`) before making any changes. Only files directly inside the selected directory are processed; subdirectories are not scanned recursively. Presets save the strategy and its parameters, not the target directory path. Saved type groups act as the default behavior for `--by-type`.
 
 ## Examples 举例
 
@@ -166,6 +170,32 @@ Later, apply the same strategy to any selected directory:
 
 ```bash
 $ filesort ~/reports --preset qdata-db
+```
+
+### Save default extension groups for `--by-type`
+
+```bash
+$ filesort --set-type-group images=jpg,jpeg,png,gif
+$ filesort --set-type-group docs=pdf,doc,docx
+```
+
+After that, a normal by-type run automatically uses those groups:
+
+```bash
+$ filesort ~/Downloads --by-type
+```
+
+You can inspect or remove them later:
+
+```bash
+$ filesort --list-type-groups
+$ filesort --remove-type-group images
+```
+
+To temporarily ignore the saved groups:
+
+```bash
+$ filesort ~/Downloads --by-type --no-type-groups
 ```
 
 ### Undo the last operation

@@ -3,7 +3,15 @@ import shutil
 import tempfile
 import unittest
 
-from organizer.presets import PRESETS_ENV_VAR, PresetError, load_preset, save_preset
+from organizer.presets import (
+    PRESETS_ENV_VAR,
+    PresetError,
+    load_preset,
+    load_type_groups,
+    remove_type_group,
+    save_preset,
+    save_type_group,
+)
 
 
 class PresetTests(unittest.TestCase):
@@ -46,6 +54,30 @@ class PresetTests(unittest.TestCase):
     def test_load_preset_requires_existing_name(self):
         with self.assertRaises(PresetError):
             load_preset("missing")
+
+    def test_save_and_load_type_groups_round_trip(self):
+        path, existed = save_type_group("images", ["jpg", ".gif", "PNG"])
+
+        self.assertFalse(existed)
+        self.assertTrue(os.path.isfile(path))
+        self.assertEqual(
+            load_type_groups(),
+            {"images": ["jpg", "gif", "png"]},
+        )
+
+    def test_save_type_group_rejects_extension_conflicts(self):
+        save_type_group("images", ["jpg", "gif"])
+
+        with self.assertRaises(PresetError):
+            save_type_group("docs", ["pdf", "jpg"])
+
+    def test_remove_type_group_updates_store(self):
+        save_type_group("images", ["jpg", "gif"])
+        save_type_group("docs", ["pdf"])
+
+        remove_type_group("images")
+
+        self.assertEqual(load_type_groups(), {"docs": ["pdf"]})
 
 
 if __name__ == "__main__":

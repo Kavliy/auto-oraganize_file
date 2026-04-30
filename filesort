@@ -4,14 +4,144 @@
 Usage:
     filesort <target_dir> [OPTIONS]
     filesort <target_dir> --undo
+    filesort --set-type-group NAME=ext1,ext2
 """
 
 import argparse
 import sys
 
 from organizer.core import organize
-from organizer.presets import PresetError, load_preset, save_preset
+from organizer.presets import (
+    PresetError,
+    load_preset,
+    load_type_groups,
+    remove_type_group,
+    save_preset,
+    save_type_group,
+)
 from organizer.undo import undo_last
+
+
+def _parse_type_group_spec(spec):
+    if "=" not in spec:
+        raise PresetError(
+            "Type-group definitions must look like 'images=jpg,jpeg,png'."
+        )
+
+    group_name, raw_extensions = spec.split("=", 1)
+    extensions = [part.strip() for part in raw_extensions.split(",") if part.strip()]
+    if not extensions:
+        raise PresetError(
+            f"Type group '{group_name.strip() or group_name}' must include at least one extension."
+        )
+    return group_name, extensions
+
+
+def _handle_type_group_commands(args, parser):
+    modes = sum(
+        1
+        for active in (
+            bool(args.set_type_group),
+            bool(args.remove_type_group),
+            args.list_type_groups,
+        )
+        if active
+    )
+    if modes == 0:
+        return False
+
+    if modes > 1:
+        parser.error(
+            "Choose only one type-group management mode: set, remove, or list."
+        )
+
+    if args.target is not None:
+        parser.error("Type-group management commands do not take a target directory.")
+
+    if (
+        args.undo
+        or args.execute
+        or args.save_preset
+        or args.preset
+        or args.by_type
+        or args.by_pattern
+        or args.by_date is not None
+        or args.no_type_groups
+    ):
+        parser.error(
+            "Type-group management commands cannot be combined with organization options."
+        )
+
+    try:
+        if args.set_type_group:
+            for spec in args.set_type_group:
+                name, extensions = _parse_type_group_spec(spec)
+                path, existed = save_type_group(name, extensions)
+                action = "Updated" if existed else "Saved"
+                print(
+                    f"{action} type group '{name.strip()}' in '{path}' "
+                    f"with extensions: {', '.join(extensions)}."
+                )
+            return True
+
+        if args.remove_type_group:
+            for name in args.remove_type_group:
+                path = remove_type_group(name)
+                print(f"Removed type group '{name}' from '{path}'.")
+            return True
+
+        type_groups = load_type_groups()
+        if not type_groups:
+            print("No type groups configured.")
+            return True
+
+        print("Configured type groups:")
+        for name in sorted(type_groups):
+            print(f"  {name}={','.join(type_groups[name])}")
+        return True
+    except PresetError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+def _resolve_strategy(args):
+    by_type = getattr(args, "by_type", False)
+    by_pattern = getattr(args, "by_pattern", None)
+    by_date = getattr(args, "by_date", None)
+    preset_name = getattr(args, "preset", None)
+
+    if preset_name:
+        try:
+            return load_preset(preset_name)
+        except PresetError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(2)
+
+    if by_type:
+        return "by_type", {}
+    if by_pattern:
+        return "by_pattern", {"pattern": by_pattern}
+    if by_date is not None:
+        return "by_date", {"fmt": by_date}
+
+    return "by_type", {}
+
+
+def _build_runtime_strategy_args(strategy_name, strategy_args, use_type_groups):
+    runtime_args = dict(strategy_args)
+    if (
+        strategy_name == "by_type"
+        and use_type_groups
+        and "type_groups" not in runtime_args
+    ):
+        try:
+            type_groups = load_type_groups()
+        except PresetError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(2)
+        if type_groups:
+            runtime_args["type_groups"] = type_groups
+    return runtime_args
 
 
 def build_parser():
@@ -22,6 +152,7 @@ def build_parser():
     )
     parser.add_argument(
         "target",
+        nargs="?",
         help="Target directory containing files to organize. Only top-level files are processed.",
     )
 
@@ -34,7 +165,7 @@ def build_parser():
     strategy_group.add_argument(
         "-t", "--by-type",
         action="store_true",
-        help="Group by file extension.",
+        help="Group by file extension, applying saved type groups by default.",
     )
     strategy_group.add_argument(
         "-p", "--by-pattern",
@@ -58,6 +189,28 @@ def build_parser():
         help="Save the current strategy as a reusable preset.",
     )
     parser.add_argument(
+        "--set-type-group",
+        metavar="NAME=ext1,ext2",
+        action="append",
+        help="Persist a default by-type mapping such as images=jpg,jpeg,png.",
+    )
+    parser.add_argument(
+        "--remove-type-group",
+        metavar="NAME",
+        action="append",
+        help="Remove one saved type group.",
+    )
+    parser.add_argument(
+        "--list-type-groups",
+        action="store_true",
+        help="List saved type groups.",
+    )
+    parser.add_argument(
+        "--no-type-groups",
+        action="store_true",
+        help="Temporarily ignore saved global type groups for this run.",
+    )
+    parser.add_argument(
         "-u", "--undo",
         action="store_true",
         help="Rollback the last organization operation.",
@@ -69,42 +222,23 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
 
-    if args.undo and (args.preset or args.save_preset):
-        parser.error("--undo cannot be combined with preset options.")
+    if _handle_type_group_commands(args, parser):
+        return
+
+    if not args.target:
+        parser.error("target is required unless using a type-group management command.")
+
+    if args.undo and (args.preset or args.save_preset or args.no_type_groups):
+        parser.error("--undo cannot be combined with preset or type-group runtime options.")
 
     if args.preset and args.save_preset:
         parser.error("--preset cannot be combined with --save-preset.")
 
-    # --undo mode: rollback and exit
     if args.undo:
         undo_last(args.target)
         return
 
-    # Determine strategy
-    by_type = getattr(args, "by_type", False)
-    by_pattern = getattr(args, "by_pattern", None)
-    by_date = getattr(args, "by_date", None)
-    preset_name = getattr(args, "preset", None)
-
-    if preset_name:
-        try:
-            strategy_name, strategy_args = load_preset(preset_name)
-        except PresetError as e:
-            print(f"Error: {e}", file=sys.stderr)
-            sys.exit(2)
-    elif by_type:
-        strategy_name = "by_type"
-        strategy_args = {}
-    elif by_pattern:
-        strategy_name = "by_pattern"
-        strategy_args = {"pattern": by_pattern}
-    elif by_date is not None:
-        strategy_name = "by_date"
-        strategy_args = {"fmt": by_date}
-    else:
-        # Default: group by type
-        strategy_name = "by_type"
-        strategy_args = {}
+    strategy_name, strategy_args = _resolve_strategy(args)
 
     if args.save_preset:
         try:
@@ -116,10 +250,16 @@ def main():
         action = "Updated" if existed else "Saved"
         print(f"{action} preset '{args.save_preset}' in '{path}'.")
 
+    runtime_strategy_args = _build_runtime_strategy_args(
+        strategy_name,
+        strategy_args,
+        use_type_groups=not args.no_type_groups,
+    )
+
     organize(
         target_dir=args.target,
         strategy_name=strategy_name,
-        strategy_args=strategy_args,
+        strategy_args=runtime_strategy_args,
         execute=args.execute,
     )
 

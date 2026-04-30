@@ -58,6 +58,29 @@ class OrganizeTests(unittest.TestCase):
         self.assertEqual(exc.exception.code, 2)
         self.assertIn("Invalid regex pattern for --by-pattern", stderr.getvalue())
 
+    def test_by_type_applies_extension_groups(self):
+        self._write_file("photo.JPG", "image")
+        self._write_file("scan.gif", "gif")
+        self._write_file("report.pdf", "pdf")
+        self._write_file("movie.mp4", "video")
+
+        organize(
+            self._tmpdir,
+            "by_type",
+            {
+                "type_groups": {
+                    "images": ["jpg", "gif"],
+                    "docs": ["pdf"],
+                },
+            },
+            execute=True,
+        )
+
+        self.assertTrue(os.path.exists(self._path("images", "photo.JPG")))
+        self.assertTrue(os.path.exists(self._path("images", "scan.gif")))
+        self.assertTrue(os.path.exists(self._path("docs", "report.pdf")))
+        self.assertTrue(os.path.exists(self._path("mp4", "movie.mp4")))
+
 
 if __name__ == "__main__":
     unittest.main()

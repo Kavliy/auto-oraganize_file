@@ -17,12 +17,40 @@ def by_date(files, fmt="%Y-%m"):
     return groups
 
 
-def by_type(files):
-    """Group files by their extension (lowercased, without dot)."""
+def _build_type_group_lookup(type_groups):
+    if type_groups is None:
+        return {}
+    if not isinstance(type_groups, dict):
+        raise StrategyError("Type-group configuration is invalid.")
+
+    lookup = {}
+    for category, extensions in type_groups.items():
+        if not isinstance(extensions, list):
+            raise StrategyError(f"Type group '{category}' is invalid.")
+        for extension in extensions:
+            normalized = str(extension).strip().lower().lstrip(".")
+            if not normalized:
+                raise StrategyError(f"Type group '{category}' contains an empty extension.")
+            owner = lookup.get(normalized)
+            if owner and owner != category:
+                raise StrategyError(
+                    f"Extension '{normalized}' is assigned to multiple type groups."
+                )
+            lookup[normalized] = category
+    return lookup
+
+
+def by_type(files, type_groups=None):
+    """Group files by their extension, with optional extension-to-group mapping."""
+    extension_lookup = _build_type_group_lookup(type_groups)
     groups = {}
     for filepath in files:
         _, ext = os.path.splitext(filepath)
-        category = ext.lstrip(".").lower() if ext else "no_extension"
+        normalized = ext.lstrip(".").lower()
+        if normalized:
+            category = extension_lookup.get(normalized, normalized)
+        else:
+            category = "no_extension"
         groups.setdefault(category, []).append(filepath)
     return groups
 
