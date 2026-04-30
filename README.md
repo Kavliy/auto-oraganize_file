@@ -3,8 +3,8 @@
 
 # filesort
 
-A command-line tool that automatically sorts files into subdirectories by various classification strategies.
-一个可以通过多种分类策略自动将文件排序到子目录中的命令行工具。
+A command-line tool that automatically sorts top-level files in a selected directory into subdirectories by various classification strategies.
+一个可以通过多种分类策略自动将所选目录中的顶层文件排序到子目录中的命令行工具。
 
 ## Environment 环境
 
@@ -33,14 +33,14 @@ filesort <target_dir> --undo
 
 | Option | Description |
 |--------|-------------|
-| `-d, --by-date [FORMAT]` | Group files by modification date. Default format: `%Y-%m`. |
+| `-d, --by-date [FORMAT]` | Group files by modification date. Default format: `%Y-%m`. Category names are sanitized to stay single-level. |
 | `-t, --by-type` | Group files by extension (default strategy). |
-| `-p, --by-pattern PATTERN` | Group files by regex pattern — capture group 1 becomes the category name. |
+| `-p, --by-pattern PATTERN` | Group files by regex pattern — capture group 1 becomes the category name after sanitization. |
 | `-r, --rules RULES_FILE` | Group using a custom rules file (not yet implemented). |
 | `-e, --execute` | Execute directly without preview or confirmation. |
 | `-u, --undo` | Rollback the last organization operation. |
 
-By default, the tool shows a preview and asks for confirmation (`y/N`) before making any changes.
+By default, the tool shows a preview and asks for confirmation (`y/N`) before making any changes. Only files directly inside the selected directory are processed; subdirectories are not scanned recursively.
 
 ## Examples 举例
 
@@ -101,7 +101,7 @@ Proceed? (y/N): y
 Custom date format:
 
 ```bash
-$ filesort ~/photos --by-date %Y/%m   # creates nested dirs like 2026/04/
+$ filesort ~/photos --by-date %Y/%m   # sanitized into a single directory name like 2026_04
 ```
 
 ### Group by regex pattern
@@ -114,7 +114,7 @@ $ filesort ~/exports --by-pattern '^([^_]+).*'
 $ filesort ~/logs --by-pattern '(\d{4}-\d{2}-\d{2})'
 ```
 
-Unmatched files go to an `uncategorized` directory.
+Unmatched files go to an `uncategorized` directory. Invalid path characters such as `/` and `\` are sanitized so every category stays within a single directory level.
 ❯ 假如有这样一个文件夹,里面存在文件:
   QData一体机交易历史备库2026年Q2季度4月第三次巡检报告,QData一体机业务整合备库2026年Q2季度4月第三次巡检
   报告,QData一体机余额宝备库2026年Q2季度4月第三次巡检报告,满足:按照库名自动分类

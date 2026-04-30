@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""filesort — automatically sort files into subdirectories by various strategies.
+"""filesort - automatically sort files into subdirectories by various strategies.
 
 Usage:
     filesort <target_dir> [OPTIONS]
@@ -16,19 +16,19 @@ from organizer.undo import undo_last
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="filesort",
-        description="Sort files into subdirectories by classification strategy.",
+        description="Sort files in the selected directory into subdirectories by classification strategy.",
         epilog="Preview is shown by default; confirm with 'y' or use --execute to skip.",
     )
     parser.add_argument(
         "target",
-        help="Target directory containing files to organize.",
+        help="Target directory containing files to organize. Only top-level files are processed.",
     )
 
     strategy_group = parser.add_mutually_exclusive_group()
     strategy_group.add_argument(
         "-d", "--by-date",
         nargs="?", const="%Y-%m", metavar="FORMAT",
-        help="Group by modification date (default format: %%Y-%%m).",
+        help="Group by modification date (default format: %%Y-%%m). Category names are sanitized to stay single-level.",
     )
     strategy_group.add_argument(
         "-t", "--by-type",
@@ -38,7 +38,7 @@ def build_parser():
     strategy_group.add_argument(
         "-p", "--by-pattern",
         metavar="PATTERN",
-        help="Group by regex pattern; capture group 1 becomes the category name.",
+        help="Group by regex pattern; capture group 1 becomes the category name after sanitization.",
     )
     strategy_group.add_argument(
         "-r", "--rules",

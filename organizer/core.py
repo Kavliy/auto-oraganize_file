@@ -6,9 +6,13 @@ from organizer.strategies import by_date, by_type, by_pattern, by_rules
 from organizer.undo import save_operation
 
 
+INVALID_CATEGORY_CHARS = '<>:"/\\|?*'
+
+
 def _scan_files(target_dir):
     """Return a sorted list of regular file paths in target_dir.
-    Skips directories, hidden files, and the log file itself."""
+    Only scans the selected directory and skips subdirectories, hidden files,
+    and the log file itself."""
     files = []
     for entry in os.listdir(target_dir):
         if entry.startswith("."):
@@ -30,6 +34,34 @@ def _resolve_conflict(dest_path):
         if not os.path.exists(new_path):
             return new_path
         counter += 1
+
+
+def _normalize_category_name(category):
+    """Convert strategy output into a safe single-directory category name."""
+    text = str(category).strip()
+    if not text:
+        return "uncategorized"
+
+    normalized = []
+    previous_was_separator = False
+    for char in text:
+        if char.isspace():
+            replacement = " "
+        elif char in INVALID_CATEGORY_CHARS or ord(char) < 32:
+            replacement = "_"
+        else:
+            replacement = char
+
+        is_separator = replacement in {" ", "_"}
+        if is_separator and previous_was_separator:
+            continue
+        normalized.append(replacement)
+        previous_was_separator = is_separator
+
+    safe_name = "".join(normalized).strip(" ._")
+    if safe_name in {"", ".", ".."}:
+        return "uncategorized"
+    return safe_name
 
 
 def _print_preview(groups, target_dir):
@@ -92,7 +124,12 @@ def organize(target_dir, strategy_name, strategy_args, execute=False):
         "by_rules": by_rules,
     }
     strategy_fn = strategies[strategy_name]
-    groups = strategy_fn(files, **strategy_args)
+    raw_groups = strategy_fn(files, **strategy_args)
+
+    groups = {}
+    for raw_category, file_list in raw_groups.items():
+        category = _normalize_category_name(raw_category)
+        groups.setdefault(category, []).extend(file_list)
 
     # Filter: skip files already in their target category directory
     filtered = {}
