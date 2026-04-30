@@ -161,4 +161,4 @@ $ filesort ~/Downloads --undo
 Undone: 5 file(s) moved back, strategy='by_type'.
 ```
 
-Each undo restores files to their original locations and removes empty category directories. Subsequent `--undo` calls roll back earlier operations one at a time.
+Each undo restores files to their original locations and removes empty category directories. If a file cannot be restored because the original path is occupied or the organized copy is missing, the remaining undo entries stay in the log so you can fix the issue and run `--undo` again. Subsequent `--undo` calls roll back earlier operations one at a time.
