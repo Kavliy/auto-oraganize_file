@@ -39,6 +39,9 @@ chmod +x filesort
 ```bash
 filesort <target_dir> [OPTIONS]
 filesort <target_dir> --undo
+filesort --list presets|type-groups|all
+filesort presets list
+filesort groups list
 ```
 
 默认会先显示预览，并要求确认；加上 `--execute` 可以直接执行。
@@ -52,12 +55,16 @@ filesort <target_dir> --undo
 | `-p`, `--by-pattern PATTERN` | 按正则分组，捕获组 1 作为分类名 |
 | `--preset NAME` | 使用已保存的整理预设 |
 | `--save-preset NAME` | 将当前整理策略保存为预设 |
+| `--list presets\|type-groups\|all` | 查看已保存的预设、扩展名分组或全部配置 |
+| `--list-preset` | 查看已保存的整理预设 |
+| `--remove-preset NAME` | 删除一个整理预设 |
 | `--set-type-group NAME=ext1,ext2` | 保存全局扩展名分组 |
 | `--remove-type-group NAME` | 删除一个扩展名分组 |
 | `--list-type-groups` | 查看当前扩展名分组 |
 | `--no-type-groups` | 本次按扩展名整理时忽略全局扩展名分组 |
 | `-e`, `--execute` | 跳过确认，直接执行 |
 | `-u`, `--undo` | 撤销最近一次整理 |
+| `--completion SHELL` | 输出 bash、zsh 或 PowerShell 的 Tab 补全脚本 |
 
 ## 示例
 
@@ -112,6 +119,13 @@ filesort ~/reports --by-pattern 'QData一体机(.+?)\d{4}年.*' --save-preset qd
 filesort ~/reports --preset qdata-db
 ```
 
+查看和删除：
+
+```bash
+filesort presets list
+filesort presets remove qdata-db
+```
+
 说明：
 
 - 预设只保存整理策略和参数
@@ -141,14 +155,51 @@ filesort ~/Downloads -t
 查看和删除：
 
 ```bash
-filesort --list-type-groups
-filesort --remove-type-group images
+filesort groups list
+filesort groups remove images
 ```
 
 本次临时忽略全局分组：
 
 ```bash
 filesort ~/Downloads -t --no-type-groups
+```
+
+### 6. 统一查看配置
+
+```bash
+filesort --list presets
+filesort --list type-groups
+filesort --list all
+```
+
+旧参数仍然可用：
+
+```bash
+filesort --list-preset
+filesort --remove-preset qdata-db
+filesort --list-type-groups
+filesort --remove-type-group images
+```
+
+### 7. 启用 Tab 补全
+
+PowerShell 当前会话：
+
+```powershell
+python filesort completion powershell | Out-String | Invoke-Expression
+```
+
+bash 当前会话：
+
+```bash
+source <(python filesort completion bash)
+```
+
+zsh 当前会话：
+
+```zsh
+source <(python filesort completion zsh)
 ```
 
 ## 撤销整理

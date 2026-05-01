@@ -1,15 +1,24 @@
 import json
 import os
 import shutil
-import tempfile
 import unittest
+import uuid
 
 from organizer.undo import LOG_FILENAME, save_operation, undo_last
 
 
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _make_tmpdir():
+    path = os.path.join(REPO_ROOT, f"tmp_test_{uuid.uuid4().hex}")
+    os.makedirs(path)
+    return path
+
+
 class UndoLastTests(unittest.TestCase):
     def setUp(self):
-        self._tmpdir = tempfile.mkdtemp()
+        self._tmpdir = _make_tmpdir()
         self.addCleanup(shutil.rmtree, self._tmpdir, ignore_errors=True)
 
     def _path(self, *parts):

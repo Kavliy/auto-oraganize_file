@@ -117,6 +117,31 @@ def _normalize_type_groups(groups):
     return normalized
 
 
+def _normalize_presets(presets):
+    if presets is None:
+        return {}
+    if not isinstance(presets, dict):
+        raise PresetError("Presets are invalid.")
+
+    normalized = {}
+    for name, preset in presets.items():
+        preset_name = _normalize_name(name, "Preset name")
+        if not isinstance(preset, dict):
+            raise PresetError(f"Preset '{preset_name}' is invalid.")
+
+        strategy_name = preset.get("strategy")
+        strategy_args = preset.get("strategy_args", {})
+        if not isinstance(strategy_name, str) or not isinstance(strategy_args, dict):
+            raise PresetError(f"Preset '{preset_name}' is invalid.")
+
+        normalized[preset_name] = {
+            "strategy": strategy_name,
+            "strategy_args": dict(strategy_args),
+        }
+
+    return normalized
+
+
 def save_preset(name, strategy_name, strategy_args):
     """Save or update a preset and return its storage path plus overwrite state."""
     preset_name = _normalize_name(name, "Preset name")
@@ -137,16 +162,34 @@ def load_preset(name):
     preset_name = _normalize_name(name, "Preset name")
     path = preset_store_path()
     data = _read_store(path)
-    preset = data.get("presets", {}).get(preset_name)
+    presets = _normalize_presets(data.get("presets", {}))
+    preset = presets.get(preset_name)
     if preset is None:
         raise PresetError(f"Preset '{preset_name}' was not found.")
 
-    strategy_name = preset.get("strategy")
-    strategy_args = preset.get("strategy_args", {})
-    if not isinstance(strategy_name, str) or not isinstance(strategy_args, dict):
-        raise PresetError(f"Preset '{preset_name}' is invalid.")
+    return preset["strategy"], preset["strategy_args"]
 
-    return strategy_name, strategy_args
+
+def list_presets():
+    """Return all configured presets."""
+    path = preset_store_path()
+    data = _read_store(path)
+    return _normalize_presets(data.get("presets", {}))
+
+
+def remove_preset(name):
+    """Remove one preset and return the storage path."""
+    preset_name = _normalize_name(name, "Preset name")
+    path = preset_store_path()
+    data = _read_store(path)
+    presets = _normalize_presets(data.get("presets", {}))
+    if preset_name not in presets:
+        raise PresetError(f"Preset '{preset_name}' was not found.")
+
+    del presets[preset_name]
+    data["presets"] = presets
+    _write_store(path, data)
+    return path
 
 
 def load_type_groups():

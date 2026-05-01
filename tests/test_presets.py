@@ -1,22 +1,33 @@
 import os
 import shutil
-import tempfile
 import unittest
+import uuid
 
 from organizer.presets import (
     PRESETS_ENV_VAR,
     PresetError,
+    list_presets,
     load_preset,
     load_type_groups,
+    remove_preset,
     remove_type_group,
     save_preset,
     save_type_group,
 )
 
 
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _make_tmpdir():
+    path = os.path.join(REPO_ROOT, f"tmp_test_{uuid.uuid4().hex}")
+    os.makedirs(path)
+    return path
+
+
 class PresetTests(unittest.TestCase):
     def setUp(self):
-        self._tmpdir = tempfile.mkdtemp()
+        self._tmpdir = _make_tmpdir()
         self.addCleanup(shutil.rmtree, self._tmpdir, ignore_errors=True)
 
         self._previous_env = os.environ.get(PRESETS_ENV_VAR)
@@ -54,6 +65,41 @@ class PresetTests(unittest.TestCase):
     def test_load_preset_requires_existing_name(self):
         with self.assertRaises(PresetError):
             load_preset("missing")
+
+    def test_list_presets_returns_saved_presets(self):
+        save_preset("downloads", "by_type", {})
+        save_preset("monthly", "by_date", {"fmt": "%Y-%m"})
+
+        self.assertEqual(
+            list_presets(),
+            {
+                "downloads": {"strategy": "by_type", "strategy_args": {}},
+                "monthly": {
+                    "strategy": "by_date",
+                    "strategy_args": {"fmt": "%Y-%m"},
+                },
+            },
+        )
+
+    def test_remove_preset_updates_store(self):
+        save_preset("downloads", "by_type", {})
+        save_preset("monthly", "by_date", {"fmt": "%Y-%m"})
+
+        remove_preset("downloads")
+
+        self.assertEqual(
+            list_presets(),
+            {
+                "monthly": {
+                    "strategy": "by_date",
+                    "strategy_args": {"fmt": "%Y-%m"},
+                },
+            },
+        )
+
+    def test_remove_preset_requires_existing_name(self):
+        with self.assertRaises(PresetError):
+            remove_preset("missing")
 
     def test_save_and_load_type_groups_round_trip(self):
         path, existed = save_type_group("images", ["jpg", ".gif", "PNG"])

@@ -39,6 +39,9 @@ You can also place `filesort` in your `PATH` for global use.
 ```bash
 filesort <target_dir> [OPTIONS]
 filesort <target_dir> --undo
+filesort --list presets|type-groups|all
+filesort presets list
+filesort groups list
 ```
 
 By default, the tool shows a preview and asks for confirmation. Add `--execute` to run immediately.
@@ -52,12 +55,16 @@ By default, the tool shows a preview and asks for confirmation. Add `--execute` 
 | `-p`, `--by-pattern PATTERN` | Sort by regex; capture group 1 becomes the category name |
 | `--preset NAME` | Use a saved preset |
 | `--save-preset NAME` | Save the current strategy as a preset |
+| `--list presets\|type-groups\|all` | List saved presets, extension groups, or all config |
+| `--list-preset` | List saved presets |
+| `--remove-preset NAME` | Remove one saved preset |
 | `--set-type-group NAME=ext1,ext2` | Save a global extension group |
 | `--remove-type-group NAME` | Remove one extension group |
 | `--list-type-groups` | List saved extension groups |
 | `--no-type-groups` | Ignore global extension groups for the current by-type run |
 | `-e`, `--execute` | Skip confirmation and execute immediately |
 | `-u`, `--undo` | Undo the most recent organization run |
+| `--completion SHELL` | Print a Tab-completion script for bash, zsh, or PowerShell |
 
 ## Examples
 
@@ -112,6 +119,13 @@ Reuse it later in any selected directory:
 filesort ~/reports --preset qdata-db
 ```
 
+Inspect and remove presets:
+
+```bash
+filesort presets list
+filesort presets remove qdata-db
+```
+
 Notes:
 
 - Presets save the strategy and its parameters
@@ -141,14 +155,51 @@ Example behavior:
 Inspect and remove groups:
 
 ```bash
-filesort --list-type-groups
-filesort --remove-type-group images
+filesort groups list
+filesort groups remove images
 ```
 
 Temporarily ignore saved groups:
 
 ```bash
 filesort ~/Downloads -t --no-type-groups
+```
+
+### 6. List saved config
+
+```bash
+filesort --list presets
+filesort --list type-groups
+filesort --list all
+```
+
+The older flags still work:
+
+```bash
+filesort --list-preset
+filesort --remove-preset qdata-db
+filesort --list-type-groups
+filesort --remove-type-group images
+```
+
+### 7. Enable Tab completion
+
+For the current PowerShell session:
+
+```powershell
+python filesort completion powershell | Out-String | Invoke-Expression
+```
+
+For the current bash session:
+
+```bash
+source <(python filesort completion bash)
+```
+
+For the current zsh session:
+
+```zsh
+source <(python filesort completion zsh)
 ```
 
 ## Undo

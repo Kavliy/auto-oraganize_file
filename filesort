@@ -4,6 +4,15 @@
 Usage:
     filesort <target_dir> [OPTIONS]
     filesort <target_dir> --undo
+    filesort --list presets|type-groups|all
+    filesort presets list
+    filesort presets remove NAME
+    filesort groups list
+    filesort groups set NAME=ext1,ext2
+    filesort groups remove NAME
+    filesort completion SHELL
+    filesort --list-preset
+    filesort --remove-preset NAME
     filesort --set-type-group NAME=ext1,ext2
 """
 
@@ -13,13 +22,66 @@ import sys
 from organizer.core import organize
 from organizer.presets import (
     PresetError,
+    list_presets,
     load_preset,
     load_type_groups,
+    remove_preset,
     remove_type_group,
     save_preset,
     save_type_group,
 )
 from organizer.undo import undo_last
+
+
+LIST_TARGET_ALIASES = {
+    "all": "all",
+    "preset": "presets",
+    "presets": "presets",
+    "type-group": "type-groups",
+    "type-groups": "type-groups",
+    "group": "type-groups",
+    "groups": "type-groups",
+}
+
+COMPLETION_SHELLS = {"bash", "powershell", "zsh"}
+
+
+def _expand_management_argv(argv):
+    if not argv:
+        return argv
+
+    command = argv[0]
+    rest = argv[1:]
+
+    if command == "completion":
+        return ["--completion"] + rest
+
+    if command in ("preset", "presets"):
+        if not rest or rest[0] == "list":
+            return ["--list", "presets"] + rest[1:]
+        if rest[0] == "remove":
+            expanded = []
+            for name in rest[1:]:
+                expanded.extend(["--remove-preset", name])
+            return expanded
+        return argv
+
+    if command in ("group", "groups", "type-group", "type-groups"):
+        if not rest or rest[0] == "list":
+            return ["--list", "type-groups"] + rest[1:]
+        if rest[0] == "set":
+            expanded = []
+            for spec in rest[1:]:
+                expanded.extend(["--set-type-group", spec])
+            return expanded
+        if rest[0] == "remove":
+            expanded = []
+            for name in rest[1:]:
+                expanded.extend(["--remove-type-group", name])
+            return expanded
+        return argv
+
+    return argv
 
 
 def _parse_type_group_spec(spec):
@@ -35,6 +97,132 @@ def _parse_type_group_spec(spec):
             f"Type group '{group_name.strip() or group_name}' must include at least one extension."
         )
     return group_name, extensions
+
+
+def _format_strategy_args(strategy_args):
+    if not strategy_args:
+        return ""
+    parts = [f"{key}={strategy_args[key]!r}" for key in sorted(strategy_args)]
+    return f" ({', '.join(parts)})"
+
+
+def _print_presets():
+    presets = list_presets()
+    if not presets:
+        print("No presets configured.")
+        return
+
+    print("Configured presets:")
+    for name in sorted(presets):
+        preset = presets[name]
+        print(
+            f"  {name}: {preset['strategy']}"
+            f"{_format_strategy_args(preset['strategy_args'])}"
+        )
+
+
+def _print_type_groups():
+    type_groups = load_type_groups()
+    if not type_groups:
+        print("No type groups configured.")
+        return
+
+    print("Configured type groups:")
+    for name in sorted(type_groups):
+        print(f"  {name}={','.join(type_groups[name])}")
+
+
+def _has_organization_options(args):
+    return (
+        args.undo
+        or args.execute
+        or args.save_preset
+        or args.preset
+        or args.by_type
+        or args.by_pattern
+        or args.by_date is not None
+        or args.no_type_groups
+    )
+
+
+def _handle_list_command(args, parser):
+    if not args.list_config:
+        return False
+
+    if args.target is not None:
+        parser.error("List commands do not take a target directory.")
+
+    if (
+        _has_organization_options(args)
+        or args.list_preset
+        or args.remove_preset
+        or args.set_type_group
+        or args.remove_type_group
+        or args.list_type_groups
+        or args.completion
+    ):
+        parser.error("List commands cannot be combined with other modes.")
+
+    target = LIST_TARGET_ALIASES.get(args.list_config)
+    if target is None:
+        valid = ", ".join(sorted(LIST_TARGET_ALIASES))
+        parser.error(f"--list must be one of: {valid}.")
+
+    try:
+        if target in ("presets", "all"):
+            _print_presets()
+        if target == "all":
+            print()
+        if target in ("type-groups", "all"):
+            _print_type_groups()
+        return True
+    except PresetError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+def _handle_preset_commands(args, parser):
+    modes = sum(
+        1
+        for active in (
+            args.list_preset,
+            bool(args.remove_preset),
+        )
+        if active
+    )
+    if modes == 0:
+        return False
+
+    if modes > 1:
+        parser.error("Choose only one preset management mode: list or remove.")
+
+    if args.target is not None:
+        parser.error("Preset management commands do not take a target directory.")
+
+    if (
+        _has_organization_options(args)
+        or args.list_config
+        or args.completion
+        or args.set_type_group
+        or args.remove_type_group
+        or args.list_type_groups
+    ):
+        parser.error(
+            "Preset management commands cannot be combined with organization options."
+        )
+
+    try:
+        if args.remove_preset:
+            for name in args.remove_preset:
+                path = remove_preset(name)
+                print(f"Removed preset '{name}' from '{path}'.")
+            return True
+
+        _print_presets()
+        return True
+    except PresetError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(2)
 
 
 def _handle_type_group_commands(args, parser):
@@ -59,14 +247,11 @@ def _handle_type_group_commands(args, parser):
         parser.error("Type-group management commands do not take a target directory.")
 
     if (
-        args.undo
-        or args.execute
-        or args.save_preset
-        or args.preset
-        or args.by_type
-        or args.by_pattern
-        or args.by_date is not None
-        or args.no_type_groups
+        _has_organization_options(args)
+        or args.list_config
+        or args.completion
+        or args.list_preset
+        or args.remove_preset
     ):
         parser.error(
             "Type-group management commands cannot be combined with organization options."
@@ -90,18 +275,207 @@ def _handle_type_group_commands(args, parser):
                 print(f"Removed type group '{name}' from '{path}'.")
             return True
 
-        type_groups = load_type_groups()
-        if not type_groups:
-            print("No type groups configured.")
-            return True
-
-        print("Configured type groups:")
-        for name in sorted(type_groups):
-            print(f"  {name}={','.join(type_groups[name])}")
+        _print_type_groups()
         return True
     except PresetError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(2)
+
+
+def _completion_options():
+    return [
+        "-h",
+        "--help",
+        "-d",
+        "--by-date",
+        "-t",
+        "--by-type",
+        "-p",
+        "--by-pattern",
+        "--preset",
+        "-e",
+        "--execute",
+        "--save-preset",
+        "--list",
+        "--list-preset",
+        "--list-presets",
+        "--remove-preset",
+        "--set-type-group",
+        "--remove-type-group",
+        "--list-type-groups",
+        "--no-type-groups",
+        "-u",
+        "--undo",
+        "--completion",
+    ]
+
+
+def _completion_script(shell):
+    options = " ".join(_completion_options())
+    list_targets = " ".join(sorted(LIST_TARGET_ALIASES))
+    shells = " ".join(sorted(COMPLETION_SHELLS))
+    commands = "completion group groups preset presets type-group type-groups"
+
+    if shell == "bash":
+        return f"""# bash completion for filesort
+_filesort_completion() {{
+  local cur prev words cword
+  COMPREPLY=()
+  cur="${{COMP_WORDS[COMP_CWORD]}}"
+  prev="${{COMP_WORDS[COMP_CWORD-1]}}"
+
+  case "$prev" in
+    --list)
+      COMPREPLY=( $(compgen -W "{list_targets}" -- "$cur") )
+      return 0
+      ;;
+    --completion|completion)
+      COMPREPLY=( $(compgen -W "{shells}" -- "$cur") )
+      return 0
+      ;;
+    preset|presets)
+      COMPREPLY=( $(compgen -W "list remove" -- "$cur") )
+      return 0
+      ;;
+    group|groups|type-group|type-groups)
+      COMPREPLY=( $(compgen -W "list set remove" -- "$cur") )
+      return 0
+      ;;
+  esac
+
+  if [[ "$cur" == -* ]]; then
+    COMPREPLY=( $(compgen -W "{options}" -- "$cur") )
+  else
+    COMPREPLY=( $(compgen -W "{commands}" -- "$cur") )
+  fi
+}}
+complete -F _filesort_completion filesort
+"""
+
+    if shell == "zsh":
+        return f"""# zsh completion for filesort
+#compdef filesort
+
+_filesort() {{
+  local -a options commands list_targets shells preset_actions group_actions
+  options=({_zsh_words(_completion_options())})
+  commands=({_zsh_words(commands.split())})
+  list_targets=({_zsh_words(sorted(LIST_TARGET_ALIASES))})
+  shells=({_zsh_words(sorted(COMPLETION_SHELLS))})
+  preset_actions=(list remove)
+  group_actions=(list set remove)
+
+  case $words[2] in
+    preset|presets)
+      _describe 'preset action' preset_actions
+      return
+      ;;
+    group|groups|type-group|type-groups)
+      _describe 'group action' group_actions
+      return
+      ;;
+    completion)
+      _describe 'shell' shells
+      return
+      ;;
+  esac
+
+  if [[ $words[CURRENT-1] == "--list" ]]; then
+    _describe 'list target' list_targets
+    return
+  fi
+
+  if [[ $PREFIX == -* ]]; then
+    _describe 'option' options
+  else
+    _describe 'command' commands
+    _files
+  fi
+}}
+
+_filesort "$@"
+"""
+
+    return f"""# PowerShell completion for filesort
+Register-ArgumentCompleter -Native -CommandName filesort -ScriptBlock {{
+  param($wordToComplete, $commandAst, $cursorPosition)
+
+  $options = @('{ "', '".join(_completion_options()) }')
+  $commands = @('{ "', '".join(commands.split()) }')
+  $listTargets = @('{ "', '".join(sorted(LIST_TARGET_ALIASES)) }')
+  $shells = @('{ "', '".join(sorted(COMPLETION_SHELLS)) }')
+  $words = $commandAst.CommandElements | ForEach-Object {{ $_.ToString() }}
+  $previous = if ($words.Count -gt 1) {{ $words[$words.Count - 2] }} else {{ "" }}
+  $first = if ($words.Count -gt 1) {{ $words[1] }} else {{ "" }}
+
+  if ($previous -eq "--list") {{
+    $listTargets | Where-Object {{ $_ -like "$wordToComplete*" }} | ForEach-Object {{
+      [System.Management.Automation.CompletionResult]::new($_, $_, "ParameterValue", $_)
+    }}
+    return
+  }}
+
+  if ($previous -in @("--completion", "completion")) {{
+    $shells | Where-Object {{ $_ -like "$wordToComplete*" }} | ForEach-Object {{
+      [System.Management.Automation.CompletionResult]::new($_, $_, "ParameterValue", $_)
+    }}
+    return
+  }}
+
+  if ($first -in @("preset", "presets")) {{
+    @("list", "remove") | Where-Object {{ $_ -like "$wordToComplete*" }} | ForEach-Object {{
+      [System.Management.Automation.CompletionResult]::new($_, $_, "ParameterValue", $_)
+    }}
+    return
+  }}
+
+  if ($first -in @("group", "groups", "type-group", "type-groups")) {{
+    @("list", "set", "remove") | Where-Object {{ $_ -like "$wordToComplete*" }} | ForEach-Object {{
+      [System.Management.Automation.CompletionResult]::new($_, $_, "ParameterValue", $_)
+    }}
+    return
+  }}
+
+  $candidates = if ($wordToComplete -like "-*") {{ $options }} else {{ $commands + $options }}
+  $candidates | Where-Object {{ $_ -like "$wordToComplete*" }} | ForEach-Object {{
+    [System.Management.Automation.CompletionResult]::new($_, $_, "ParameterName", $_)
+  }}
+}}
+"""
+
+
+def _zsh_words(words):
+    return " ".join(f"'{word}'" for word in words)
+
+
+def _handle_completion_command(args, parser):
+    if not args.completion:
+        return False
+
+    if args.target is not None:
+        parser.error("Completion commands do not take a target directory.")
+
+    if (
+        _has_organization_options(args)
+        or args.list_config
+        or args.list_preset
+        or args.remove_preset
+        or args.set_type_group
+        or args.remove_type_group
+        or args.list_type_groups
+    ):
+        parser.error("Completion commands cannot be combined with other modes.")
+
+    shell = args.completion.lower()
+    if shell not in COMPLETION_SHELLS:
+        parser.error(
+            "--completion must be one of: "
+            + ", ".join(sorted(COMPLETION_SHELLS))
+            + "."
+        )
+
+    print(_completion_script(shell), end="")
+    return True
 
 
 def _resolve_strategy(args):
@@ -148,7 +522,10 @@ def build_parser():
     parser = argparse.ArgumentParser(
         prog="filesort",
         description="Sort files in the selected directory into subdirectories by classification strategy.",
-        epilog="Preview is shown by default; confirm with 'y' or use --execute to skip.",
+        epilog=(
+            "Preview is shown by default; confirm with 'y' or use --execute to skip. "
+            "Config shortcuts: filesort presets list, filesort groups set images=jpg,png."
+        ),
     )
     parser.add_argument(
         "target",
@@ -189,6 +566,25 @@ def build_parser():
         help="Save the current strategy as a reusable preset.",
     )
     parser.add_argument(
+        "--list",
+        dest="list_config",
+        metavar="WHAT",
+        help="List saved config: presets, type-groups, or all.",
+    )
+    parser.add_argument(
+        "--list-preset",
+        "--list-presets",
+        dest="list_preset",
+        action="store_true",
+        help="List saved presets.",
+    )
+    parser.add_argument(
+        "--remove-preset",
+        metavar="NAME",
+        action="append",
+        help="Remove one saved preset.",
+    )
+    parser.add_argument(
         "--set-type-group",
         metavar="NAME=ext1,ext2",
         action="append",
@@ -215,20 +611,43 @@ def build_parser():
         action="store_true",
         help="Rollback the last organization operation.",
     )
+    parser.add_argument(
+        "--completion",
+        metavar="SHELL",
+        help="Print a completion script for bash, zsh, or powershell.",
+    )
     return parser
 
 
-def main():
+def main(argv=None):
     parser = build_parser()
-    args = parser.parse_args()
+    argv = _expand_management_argv(sys.argv[1:] if argv is None else list(argv))
+    args = parser.parse_args(argv)
+
+    if _handle_completion_command(args, parser):
+        return
+
+    if _handle_list_command(args, parser):
+        return
 
     if _handle_type_group_commands(args, parser):
         return
 
-    if not args.target:
-        parser.error("target is required unless using a type-group management command.")
+    if _handle_preset_commands(args, parser):
+        return
 
-    if args.undo and (args.preset or args.save_preset or args.no_type_groups):
+    if not args.target:
+        parser.error(
+            "target is required unless using a preset or type-group management command."
+        )
+
+    if args.undo and (
+        args.preset
+        or args.save_preset
+        or args.list_preset
+        or args.remove_preset
+        or args.no_type_groups
+    ):
         parser.error("--undo cannot be combined with preset or type-group runtime options.")
 
     if args.preset and args.save_preset:
