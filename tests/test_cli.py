@@ -39,9 +39,15 @@ class CliTests(unittest.TestCase):
         else:
             os.environ[PRESETS_ENV_VAR] = self._previous_env
 
-    def _run(self, *args):
+    def _run(self, *args, **kwargs):
+        extra_env = kwargs.pop("extra_env", None)
+        if kwargs:
+            raise TypeError(f"Unexpected keyword arguments: {', '.join(kwargs)}")
+
         env = os.environ.copy()
         env[PRESETS_ENV_VAR] = self._store_path
+        if extra_env:
+            env.update(extra_env)
         return subprocess.run(
             [sys.executable, FILESORT, *args],
             cwd=REPO_ROOT,
@@ -83,6 +89,56 @@ class CliTests(unittest.TestCase):
 
         self.assertIn("Register-ArgumentCompleter", result.stdout)
         self.assertIn("--list", result.stdout)
+
+    def test_help_hides_legacy_management_flags(self):
+        result = self._run("--help")
+
+        self.assertIn("filesort presets list", result.stdout)
+        self.assertIn("filesort completion install", result.stdout)
+        self.assertNotIn("--list-preset", result.stdout)
+        self.assertNotIn("--remove-preset", result.stdout)
+        self.assertNotIn("--set-type-group", result.stdout)
+        self.assertNotIn("--remove-type-group", result.stdout)
+        self.assertNotIn("--list-type-groups", result.stdout)
+        self.assertNotIn("--completion", result.stdout)
+        self.assertNotIn("--install-completion", result.stdout)
+
+    def test_legacy_management_flags_still_work(self):
+        set_result = self._run("--set-type-group", "images=jpg,png")
+        list_result = self._run("--list-type-groups")
+        remove_result = self._run("--remove-type-group", "images")
+
+        self.assertIn("Saved type group 'images'", set_result.stdout)
+        self.assertIn("images=jpg,png", list_result.stdout)
+        self.assertIn("Removed type group 'images'", remove_result.stdout)
+
+    def test_completion_install_bash_updates_user_files(self):
+        result = self._run(
+            "completion",
+            "install",
+            "bash",
+            extra_env={"FILESORT_COMPLETION_HOME": self._tmpdir},
+        )
+
+        completion_path = os.path.join(
+            self._tmpdir,
+            ".local",
+            "share",
+            "bash-completion",
+            "completions",
+            "filesort",
+        )
+        bashrc_path = os.path.join(self._tmpdir, ".bashrc")
+
+        self.assertIn("Installed bash completion", result.stdout)
+        self.assertTrue(os.path.isfile(completion_path))
+        self.assertTrue(os.path.isfile(bashrc_path))
+
+        with open(bashrc_path, "r", encoding="utf-8") as f:
+            bashrc = f.read()
+
+        self.assertIn(">>> filesort completion >>>", bashrc)
+        self.assertIn("bash-completion/completions/filesort", bashrc)
 
 
 if __name__ == "__main__":

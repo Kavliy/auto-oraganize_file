@@ -56,15 +56,20 @@ By default, the tool shows a preview and asks for confirmation. Add `--execute` 
 | `--preset NAME` | Use a saved preset |
 | `--save-preset NAME` | Save the current strategy as a preset |
 | `--list presets\|type-groups\|all` | List saved presets, extension groups, or all config |
-| `--list-preset` | List saved presets |
-| `--remove-preset NAME` | Remove one saved preset |
-| `--set-type-group NAME=ext1,ext2` | Save a global extension group |
-| `--remove-type-group NAME` | Remove one extension group |
-| `--list-type-groups` | List saved extension groups |
 | `--no-type-groups` | Ignore global extension groups for the current by-type run |
 | `-e`, `--execute` | Skip confirmation and execute immediately |
 | `-u`, `--undo` | Undo the most recent organization run |
-| `--completion SHELL` | Print a Tab-completion script for bash, zsh, or PowerShell |
+
+Config management uses subcommands to keep the main option list compact:
+
+| Command | Description |
+| --- | --- |
+| `filesort presets list` | List saved presets |
+| `filesort presets remove NAME` | Remove one saved preset |
+| `filesort groups set NAME=ext1,ext2` | Save a global extension group |
+| `filesort groups list` | List saved extension groups |
+| `filesort groups remove NAME` | Remove one extension group |
+| `filesort completion install [SHELL]` | Install Tab completion for bash, zsh, or PowerShell |
 
 ## Examples
 
@@ -173,7 +178,7 @@ filesort --list type-groups
 filesort --list all
 ```
 
-The older flags still work:
+The older flags still work for existing scripts, but they are hidden from `--help`:
 
 ```bash
 filesort --list-preset
@@ -184,23 +189,28 @@ filesort --remove-type-group images
 
 ### 7. Enable Tab completion
 
-For the current PowerShell session:
-
-```powershell
-python filesort completion powershell | Out-String | Invoke-Expression
-```
-
-For the current bash session:
+Recommended one-time install. New terminals will load completion automatically:
 
 ```bash
-source <(python filesort completion bash)
+filesort completion install
+filesort completion install bash
+filesort completion install zsh
+filesort completion install powershell
 ```
 
-For the current zsh session:
+If `filesort` is not on your `PATH` yet, run this from the project directory:
 
-```zsh
-source <(python filesort completion zsh)
+```bash
+python filesort completion install bash
 ```
+
+Notes:
+
+- `install` writes the completion script into your user directory and updates `.bashrc`, `.zshrc`, or the PowerShell profile.
+- If you omit the shell name, filesort tries to detect it from your environment.
+- Open a new terminal after installation to use Tab completion.
+- A child process cannot modify the already-open parent shell directly. For immediate use, run `source ~/.bashrc` for bash or `source ~/.zshrc` for zsh.
+- `filesort completion bash|zsh|powershell` still works when you only want to print the script for manual integration.
 
 ## Undo
 

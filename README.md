@@ -56,15 +56,20 @@ filesort groups list
 | `--preset NAME` | 使用已保存的整理预设 |
 | `--save-preset NAME` | 将当前整理策略保存为预设 |
 | `--list presets\|type-groups\|all` | 查看已保存的预设、扩展名分组或全部配置 |
-| `--list-preset` | 查看已保存的整理预设 |
-| `--remove-preset NAME` | 删除一个整理预设 |
-| `--set-type-group NAME=ext1,ext2` | 保存全局扩展名分组 |
-| `--remove-type-group NAME` | 删除一个扩展名分组 |
-| `--list-type-groups` | 查看当前扩展名分组 |
 | `--no-type-groups` | 本次按扩展名整理时忽略全局扩展名分组 |
 | `-e`, `--execute` | 跳过确认，直接执行 |
 | `-u`, `--undo` | 撤销最近一次整理 |
-| `--completion SHELL` | 输出 bash、zsh 或 PowerShell 的 Tab 补全脚本 |
+
+配置管理使用子命令，避免主参数过长：
+
+| 命令 | 说明 |
+| --- | --- |
+| `filesort presets list` | 查看已保存的整理预设 |
+| `filesort presets remove NAME` | 删除一个整理预设 |
+| `filesort groups set NAME=ext1,ext2` | 保存全局扩展名分组 |
+| `filesort groups list` | 查看当前扩展名分组 |
+| `filesort groups remove NAME` | 删除一个扩展名分组 |
+| `filesort completion install [SHELL]` | 安装 bash、zsh 或 PowerShell 的 Tab 补全 |
 
 ## 示例
 
@@ -173,7 +178,7 @@ filesort --list type-groups
 filesort --list all
 ```
 
-旧参数仍然可用：
+旧参数仍然可用以兼容已有脚本，但不会出现在 `--help` 中：
 
 ```bash
 filesort --list-preset
@@ -184,23 +189,28 @@ filesort --remove-type-group images
 
 ### 7. 启用 Tab 补全
 
-PowerShell 当前会话：
-
-```powershell
-python filesort completion powershell | Out-String | Invoke-Expression
-```
-
-bash 当前会话：
+推荐一次性安装，之后新打开的终端会自动启用：
 
 ```bash
-source <(python filesort completion bash)
+filesort completion install
+filesort completion install bash
+filesort completion install zsh
+filesort completion install powershell
 ```
 
-zsh 当前会话：
+如果还没有把 `filesort` 放进 `PATH`，可以在项目目录里运行：
 
-```zsh
-source <(python filesort completion zsh)
+```bash
+python filesort completion install bash
 ```
+
+说明：
+
+- `install` 会把补全脚本写入用户目录，并更新 `.bashrc`、`.zshrc` 或 PowerShell profile。
+- 不传 shell 时会尝试根据当前环境自动判断。
+- 安装后重新打开终端即可使用 Tab 补全。
+- 当前已经打开的终端不会被子进程直接修改；如果想立刻生效，bash 可执行 `source ~/.bashrc`，zsh 可执行 `source ~/.zshrc`。
+- `filesort completion bash|zsh|powershell` 仍然可用，用于只输出脚本，方便手动集成。
 
 ## 撤销整理
 

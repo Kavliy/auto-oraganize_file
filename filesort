@@ -11,12 +11,14 @@ Usage:
     filesort groups set NAME=ext1,ext2
     filesort groups remove NAME
     filesort completion SHELL
+    filesort completion install [SHELL]
     filesort --list-preset
     filesort --remove-preset NAME
     filesort --set-type-group NAME=ext1,ext2
 """
 
 import argparse
+import os
 import sys
 
 from organizer.core import organize
@@ -44,6 +46,8 @@ LIST_TARGET_ALIASES = {
 }
 
 COMPLETION_SHELLS = {"bash", "powershell", "zsh"}
+COMPLETION_BLOCK_START = "# >>> filesort completion >>>"
+COMPLETION_BLOCK_END = "# <<< filesort completion <<<"
 
 
 def _expand_management_argv(argv):
@@ -54,6 +58,8 @@ def _expand_management_argv(argv):
     rest = argv[1:]
 
     if command == "completion":
+        if rest and rest[0] == "install":
+            return ["--install-completion"] + rest[1:]
         return ["--completion"] + rest
 
     if command in ("preset", "presets"):
@@ -160,6 +166,7 @@ def _handle_list_command(args, parser):
         or args.remove_type_group
         or args.list_type_groups
         or args.completion
+        or args.install_completion
     ):
         parser.error("List commands cannot be combined with other modes.")
 
@@ -203,6 +210,7 @@ def _handle_preset_commands(args, parser):
         _has_organization_options(args)
         or args.list_config
         or args.completion
+        or args.install_completion
         or args.set_type_group
         or args.remove_type_group
         or args.list_type_groups
@@ -250,6 +258,7 @@ def _handle_type_group_commands(args, parser):
         _has_organization_options(args)
         or args.list_config
         or args.completion
+        or args.install_completion
         or args.list_preset
         or args.remove_preset
     ):
@@ -297,16 +306,9 @@ def _completion_options():
         "--execute",
         "--save-preset",
         "--list",
-        "--list-preset",
-        "--list-presets",
-        "--remove-preset",
-        "--set-type-group",
-        "--remove-type-group",
-        "--list-type-groups",
         "--no-type-groups",
         "-u",
         "--undo",
-        "--completion",
     ]
 
 
@@ -315,6 +317,7 @@ def _completion_script(shell):
     list_targets = " ".join(sorted(LIST_TARGET_ALIASES))
     shells = " ".join(sorted(COMPLETION_SHELLS))
     commands = "completion group groups preset presets type-group type-groups"
+    completion_actions = "install bash powershell zsh"
 
     if shell == "bash":
         return f"""# bash completion for filesort
@@ -329,8 +332,12 @@ _filesort_completion() {{
       COMPREPLY=( $(compgen -W "{list_targets}" -- "$cur") )
       return 0
       ;;
-    --completion|completion)
+    --completion|install)
       COMPREPLY=( $(compgen -W "{shells}" -- "$cur") )
+      return 0
+      ;;
+    completion)
+      COMPREPLY=( $(compgen -W "{completion_actions}" -- "$cur") )
       return 0
       ;;
     preset|presets)
@@ -364,6 +371,7 @@ _filesort() {{
   shells=({_zsh_words(sorted(COMPLETION_SHELLS))})
   preset_actions=(list remove)
   group_actions=(list set remove)
+  completion_actions=(install bash powershell zsh)
 
   case $words[2] in
     preset|presets)
@@ -375,6 +383,14 @@ _filesort() {{
       return
       ;;
     completion)
+      if [[ $words[3] == "install" ]]; then
+        _describe 'shell' shells
+      else
+        _describe 'completion action' completion_actions
+      fi
+      return
+      ;;
+    install)
       _describe 'shell' shells
       return
       ;;
@@ -402,6 +418,7 @@ Register-ArgumentCompleter -Native -CommandName filesort -ScriptBlock {{
 
   $options = @('{ "', '".join(_completion_options()) }')
   $commands = @('{ "', '".join(commands.split()) }')
+  $completionActions = @('{ "', '".join(completion_actions.split()) }')
   $listTargets = @('{ "', '".join(sorted(LIST_TARGET_ALIASES)) }')
   $shells = @('{ "', '".join(sorted(COMPLETION_SHELLS)) }')
   $words = $commandAst.CommandElements | ForEach-Object {{ $_.ToString() }}
@@ -415,8 +432,15 @@ Register-ArgumentCompleter -Native -CommandName filesort -ScriptBlock {{
     return
   }}
 
-  if ($previous -in @("--completion", "completion")) {{
+  if ($previous -in @("--completion", "--install-completion", "install")) {{
     $shells | Where-Object {{ $_ -like "$wordToComplete*" }} | ForEach-Object {{
+      [System.Management.Automation.CompletionResult]::new($_, $_, "ParameterValue", $_)
+    }}
+    return
+  }}
+
+  if ($previous -eq "completion") {{
+    $completionActions | Where-Object {{ $_ -like "$wordToComplete*" }} | ForEach-Object {{
       [System.Management.Automation.CompletionResult]::new($_, $_, "ParameterValue", $_)
     }}
     return
@@ -448,8 +472,153 @@ def _zsh_words(words):
     return " ".join(f"'{word}'" for word in words)
 
 
+def _completion_home():
+    override = os.getenv("FILESORT_COMPLETION_HOME")
+    if override:
+        return os.path.abspath(os.path.expanduser(override))
+    return os.path.expanduser("~")
+
+
+def _detect_completion_shell():
+    shell = os.getenv("SHELL", "")
+    shell_name = os.path.basename(shell).lower()
+    if shell_name in COMPLETION_SHELLS:
+        return shell_name
+    if os.name == "nt":
+        return "powershell"
+    raise PresetError(
+        "Could not detect your shell. Use: filesort completion install bash|zsh|powershell."
+    )
+
+
+def _write_text(path, content):
+    directory = os.path.dirname(path)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+
+def _update_managed_block(path, block):
+    if os.path.exists(path):
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+    else:
+        content = ""
+
+    start = content.find(COMPLETION_BLOCK_START)
+    end = content.find(COMPLETION_BLOCK_END)
+    if start != -1 and end != -1 and end > start:
+        end += len(COMPLETION_BLOCK_END)
+        content = content[:start].rstrip() + "\n\n" + block + content[end:]
+    else:
+        separator = "\n\n" if content.strip() else ""
+        content = content.rstrip() + separator + block + "\n"
+
+    _write_text(path, content)
+
+
+def _install_bash_completion(home):
+    completion_path = os.path.join(
+        home,
+        ".local",
+        "share",
+        "bash-completion",
+        "completions",
+        "filesort",
+    )
+    _write_text(completion_path, _completion_script("bash"))
+
+    bashrc_path = os.path.join(home, ".bashrc")
+    block = f"""{COMPLETION_BLOCK_START}
+_filesort_completion_file="$HOME/.local/share/bash-completion/completions/filesort"
+if [ -f "$_filesort_completion_file" ]; then
+  . "$_filesort_completion_file"
+fi
+unset _filesort_completion_file
+{COMPLETION_BLOCK_END}"""
+    _update_managed_block(bashrc_path, block)
+
+    return (
+        f"Installed bash completion to '{completion_path}'.\n"
+        f"Updated '{bashrc_path}'. Open a new terminal to use Tab completion.\n"
+        "For this terminal only, run: source ~/.bashrc"
+    )
+
+
+def _install_zsh_completion(home):
+    completion_dir = os.path.join(home, ".zfunc")
+    completion_path = os.path.join(completion_dir, "_filesort")
+    _write_text(completion_path, _completion_script("zsh"))
+
+    zshrc_path = os.path.join(home, ".zshrc")
+    block = f"""{COMPLETION_BLOCK_START}
+fpath=("$HOME/.zfunc" $fpath)
+autoload -Uz compinit
+compinit
+{COMPLETION_BLOCK_END}"""
+    _update_managed_block(zshrc_path, block)
+
+    return (
+        f"Installed zsh completion to '{completion_path}'.\n"
+        f"Updated '{zshrc_path}'. Open a new terminal to use Tab completion.\n"
+        "For this terminal only, run: source ~/.zshrc"
+    )
+
+
+def _powershell_profile_path(home):
+    if os.name == "nt":
+        return os.path.join(
+            home,
+            "Documents",
+            "PowerShell",
+            "Microsoft.PowerShell_profile.ps1",
+        )
+    return os.path.join(
+        home,
+        ".config",
+        "powershell",
+        "Microsoft.PowerShell_profile.ps1",
+    )
+
+
+def _install_powershell_completion(home):
+    completion_path = os.path.join(home, ".filesort", "completion", "filesort.ps1")
+    _write_text(completion_path, _completion_script("powershell"))
+
+    profile_path = _powershell_profile_path(home)
+    block = f"""{COMPLETION_BLOCK_START}
+. "$HOME/.filesort/completion/filesort.ps1"
+{COMPLETION_BLOCK_END}"""
+    _update_managed_block(profile_path, block)
+
+    return (
+        f"Installed PowerShell completion to '{completion_path}'.\n"
+        f"Updated '{profile_path}'. Open a new terminal to use Tab completion.\n"
+        "For this terminal only, run: . $HOME/.filesort/completion/filesort.ps1"
+    )
+
+
+def _install_completion(shell):
+    selected_shell = shell.lower() if shell else _detect_completion_shell()
+    if selected_shell not in COMPLETION_SHELLS:
+        raise PresetError(
+            "Completion install shell must be one of: "
+            + ", ".join(sorted(COMPLETION_SHELLS))
+            + "."
+        )
+
+    home = _completion_home()
+    installers = {
+        "bash": _install_bash_completion,
+        "powershell": _install_powershell_completion,
+        "zsh": _install_zsh_completion,
+    }
+    return installers[selected_shell](home)
+
+
 def _handle_completion_command(args, parser):
-    if not args.completion:
+    if not args.completion and not args.install_completion:
         return False
 
     if args.target is not None:
@@ -465,6 +634,18 @@ def _handle_completion_command(args, parser):
         or args.list_type_groups
     ):
         parser.error("Completion commands cannot be combined with other modes.")
+
+    if args.completion and args.install_completion:
+        parser.error("Choose either completion script output or completion install.")
+
+    if args.install_completion:
+        shell = None if args.install_completion == "auto" else args.install_completion
+        try:
+            print(_install_completion(shell))
+            return True
+        except PresetError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(2)
 
     shell = args.completion.lower()
     if shell not in COMPLETION_SHELLS:
@@ -524,7 +705,8 @@ def build_parser():
         description="Sort files in the selected directory into subdirectories by classification strategy.",
         epilog=(
             "Preview is shown by default; confirm with 'y' or use --execute to skip. "
-            "Config shortcuts: filesort presets list, filesort groups set images=jpg,png."
+            "Config shortcuts: filesort presets list, filesort groups set images=jpg,png. "
+            "Completion setup: filesort completion install."
         ),
     )
     parser.add_argument(
@@ -576,30 +758,30 @@ def build_parser():
         "--list-presets",
         dest="list_preset",
         action="store_true",
-        help="List saved presets.",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--remove-preset",
         metavar="NAME",
         action="append",
-        help="Remove one saved preset.",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--set-type-group",
         metavar="NAME=ext1,ext2",
         action="append",
-        help="Persist a default by-type mapping such as images=jpg,jpeg,png.",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--remove-type-group",
         metavar="NAME",
         action="append",
-        help="Remove one saved type group.",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--list-type-groups",
         action="store_true",
-        help="List saved type groups.",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--no-type-groups",
@@ -614,7 +796,14 @@ def build_parser():
     parser.add_argument(
         "--completion",
         metavar="SHELL",
-        help="Print a completion script for bash, zsh, or powershell.",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--install-completion",
+        nargs="?",
+        const="auto",
+        metavar="SHELL",
+        help=argparse.SUPPRESS,
     )
     return parser
 
